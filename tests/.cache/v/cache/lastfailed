@@ -1,0 +1,4 @@
+{
+  "test_projection.py::test_basic_country_search_db": true,
+  "test_projection.py::test_basic_country_search_shape_db": true
+}
