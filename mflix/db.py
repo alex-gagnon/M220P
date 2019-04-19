@@ -8,26 +8,20 @@ docstrings with a short explanation of the task.
 Look out for TODO markers for additional help. Good luck!
 """
 
-
-from flask import current_app, g
-from werkzeug.local import LocalProxy
-
-from pymongo import MongoClient, DESCENDING
-from pymongo.write_concern import WriteConcern
-from pymongo.errors import DuplicateKeyError, OperationFailure
 from bson.objectid import ObjectId
-from bson.errors import InvalidId
-from pymongo.read_concern import ReadConcern
+from flask import current_app, g
+from pymongo import DESCENDING, MongoClient
+from pymongo.errors import DuplicateKeyError, OperationFailure
+from werkzeug.local import LocalProxy
 
 
 def get_db():
     """
     Configuration method to return db instance
     """
-    dbc = getattr(g, "_database", None)
+    dbc = getattr( g, "_database", None )
     MFLIX_DB_URI = current_app.config["MFLIX_DB_URI"]
     if dbc is None:
-
         """
         Ticket: Connection Pooling
 
@@ -43,20 +37,20 @@ def get_db():
         """
 
         dbc = g._database = MongoClient(
-        MFLIX_DB_URI,
-        # TODO: Connection Pooling
-        # Set the maximum connection pool size to 50 active connections.
-        # TODO: Timeouts
-        # Set the write timeout limit to 2500 milliseconds.
+                MFLIX_DB_URI,
+                # TODO: Connection Pooling
+                # Set the maximum connection pool size to 50 active connections.
+                # TODO: Timeouts
+                # Set the write timeout limit to 2500 milliseconds.
         )["mflix"]
     return dbc
 
 
 # Use LocalProxy to read the global db instance with just `db`
-db = LocalProxy(get_db)
+db = LocalProxy( get_db )
 
 
-def get_movies_by_country(countries):
+def get_movies_by_country( countries ):
     """
     Finds and returns movies by country.
     Returns a list of dictionaries, each dictionary contains a title and an _id.
@@ -77,13 +71,13 @@ def get_movies_by_country(countries):
         # Find movies matching the "countries" list, but only return the title
         # and _id. Do not include a limit in your own implementation, it is
         # included here to avoid sending 46000 documents down the wire.
-        return list(db.movies.find({"countries": {"$in": countries}}, {"title": 1}))
+        return list( db.movies.find( {"countries": {"$in": countries}}, {"title": 1} ) )
 
     except Exception as e:
         return e
 
 
-def get_movies_faceted(filters, page, movies_per_page):
+def get_movies_faceted( filters, page, movies_per_page ):
     """
     Returns movies and runtime and ratings facets. Also returns the total
     movies matched by the filter.
@@ -95,48 +89,48 @@ def get_movies_faceted(filters, page, movies_per_page):
     pipeline = []
 
     if "cast" in filters:
-        pipeline.extend([{
-            "$match": {"cast": {"$in": filters.get("cast")}}
+        pipeline.extend( [{
+                "$match": {"cast": {"$in": filters.get( "cast" )}}
         }, {
-            "$sort": {sort_key: DESCENDING}
-        }])
+                "$sort": {sort_key: DESCENDING}
+        }] )
     else:
-        raise AssertionError("No filters to pass to faceted search!")
+        raise AssertionError( "No filters to pass to faceted search!" )
 
     counting = pipeline[:]
     count_stage = {"$count": "count"}
-    counting.append(count_stage)
+    counting.append( count_stage )
 
     skip_stage = {"$skip": movies_per_page * page}
     limit_stage = {"$limit": movies_per_page}
     facet_stage = {
-        "$facet": {
-            "runtime": [{
-                "$bucket": {
-                    "groupBy": "$runtime",
-                    "boundaries": [0, 60, 90, 120, 180],
-                    "default": "other",
-                    "output": {
-                        "count": {"$sum": 1}
-                    }
-                }
-            }],
-            "rating": [{
-                "$bucket": {
-                    "groupBy": "$metacritic",
-                    "boundaries": [0, 50, 70, 90, 100],
-                    "default": "other",
-                    "output": {
-                        "count": {"$sum": 1}
-                    }
-                }
-            }],
-            "movies": [{
-                "$addFields": {
-                    "title": "$title"
-                }
-            }]
-        }
+            "$facet": {
+                    "runtime": [{
+                            "$bucket": {
+                                    "groupBy": "$runtime",
+                                    "boundaries": [0, 60, 90, 120, 180],
+                                    "default": "other",
+                                    "output": {
+                                            "count": {"$sum": 1}
+                                    }
+                            }
+                    }],
+                    "rating": [{
+                            "$bucket": {
+                                    "groupBy": "$metacritic",
+                                    "boundaries": [0, 50, 70, 90, 100],
+                                    "default": "other",
+                                    "output": {
+                                            "count": {"$sum": 1}
+                                    }
+                            }
+                    }],
+                    "movies": [{
+                            "$addFields": {
+                                    "title": "$title"
+                            }
+                    }]
+            }
     }
 
     """
@@ -151,18 +145,18 @@ def get_movies_faceted(filters, page, movies_per_page):
 
     # TODO: Faceted Search
     # Add the necessary stages to the pipeline variable in the correct order.
-    pipeline.extend((skip_stage, limit_stage, facet_stage))
+    pipeline.extend( (skip_stage, limit_stage, facet_stage) )
 
     try:
-        movies = list(db.movies.aggregate(pipeline, allowDiskUse=True))[0]
-        count = list(db.movies.aggregate(counting, allowDiskUse=True))[0].get("count")
+        movies = list( db.movies.aggregate( pipeline, allowDiskUse=True ) )[0]
+        count = list( db.movies.aggregate( counting, allowDiskUse=True ) )[0].get( "count" )
         return movies, count
     except OperationFailure:
         raise OperationFailure(
-            "Results too large to sort, be more restrictive in filter")
+                "Results too large to sort, be more restrictive in filter" )
 
 
-def build_query_sort_project(filters):
+def build_query_sort_project( filters ):
     """
     Builds the `query` predicate, `sort` and `projection` attributes for a given
     filters dictionary.
@@ -198,7 +192,7 @@ def build_query_sort_project(filters):
     return query, sort, project
 
 
-def get_movies(filters, page, movies_per_page):
+def get_movies( filters, page, movies_per_page ):
     """
     Returns a cursor to a list of movie documents.
 
@@ -211,15 +205,15 @@ def get_movies(filters, page, movies_per_page):
 
     Returns 2 elements in a tuple: (movies, total_num_movies)
     """
-    query, sort, project = build_query_sort_project(filters)
+    query, sort, project = build_query_sort_project( filters )
     if project:
-        cursor = db.movies.find(query, project).sort(sort)
+        cursor = db.movies.find( query, project ).sort( sort )
     else:
-        cursor = db.movies.find(query).sort(sort)
+        cursor = db.movies.find( query ).sort( sort )
 
     total_num_movies = 0
     if page == 0:
-        total_num_movies = db.movies.count_documents(query)
+        total_num_movies = db.movies.count_documents( query )
     """
     Ticket: Paging
 
@@ -233,12 +227,12 @@ def get_movies(filters, page, movies_per_page):
 
     # TODO: Paging
     # Use the cursor to only return the movies that belong on the current page.
-    movies = cursor.skip(page * movies_per_page).limit(movies_per_page)
+    movies = cursor.skip( page * movies_per_page ).limit( movies_per_page )
 
-    return list(movies), total_num_movies
+    return list( movies ), total_num_movies
 
 
-def get_movie(id):
+def get_movie( id ):
     """
     Given a movie ID, return a movie with that ID, with the comments for that
     movie embedded in the movie document. The comments are joined from the
@@ -259,14 +253,14 @@ def get_movie(id):
         # TODO: Get Comments
         # Implement the required pipeline.
         pipeline = [
-            {
-                "$match": {
-                    "_id": ObjectId(id)
+                {
+                        "$match": {
+                                "_id": ObjectId( id )
+                        }
                 }
-            }
         ]
 
-        movie = db.movies.aggregate(pipeline).next()
+        movie = db.movies.aggregate( pipeline ).next()
         return movie
 
     # TODO: Error Handling
@@ -291,10 +285,10 @@ def get_all_genres():
     """
     Returns list of all genres in the database.
     """
-    return list(db.movies.aggregate([
-        {"$unwind": "$genres"},
-        {"$group": {"_id": None, "genres": {"$addToSet": "$genres"}}}
-    ]))[0]["genres"]
+    return list( db.movies.aggregate( [
+            {"$unwind": "$genres"},
+            {"$group": {"_id": None, "genres": {"$addToSet": "$genres"}}}
+    ] ) )[0]["genres"]
 
 
 """
@@ -310,7 +304,7 @@ to better understand the task.
 """
 
 
-def add_comment(movie_id, user, comment, date):
+def add_comment( movie_id, user, comment, date ):
     """
     Inserts a comment into the comments collection, with the following fields:
 
@@ -324,11 +318,11 @@ def add_comment(movie_id, user, comment, date):
     """
     # TODO: Create/Update Comments
     # Construct the comment document to be inserted into MongoDB.
-    comment_doc = { "some_field": "some_value" }
-    return db.comments.insert_one(comment_doc)
+    comment_doc = {"some_field": "some_value"}
+    return db.comments.insert_one( comment_doc )
 
 
-def update_comment(comment_id, user_email, text, date):
+def update_comment( comment_id, user_email, text, date ):
     """
     Updates the comment in the comment collection. Queries for the comment
     based by both comment _id field as well as the email field to doubly ensure
@@ -338,14 +332,14 @@ def update_comment(comment_id, user_email, text, date):
     # Use the user_email and comment_id to select the proper comment, then
     # update the "text" and "date" of the selected comment.
     response = db.comments.update_one(
-        { "some_field": "some_value" },
-        { "$set": { "some_other_field": "some_other_value" } }
+            {"some_field": "some_value"},
+            {"$set": {"some_other_field": "some_other_value"}}
     )
 
     return response
 
 
-def delete_comment(comment_id, user_email):
+def delete_comment( comment_id, user_email ):
     """
     Given a user's email and a comment ID, deletes a comment from the comments
     collection
@@ -360,7 +354,7 @@ def delete_comment(comment_id, user_email):
 
     # TODO: Delete Comments
     # Use the user_email and comment_id to delete the proper comment.
-    response = db.comments.delete_one( { "_id": ObjectId(comment_id) } )
+    response = db.comments.delete_one( {"_id": ObjectId( comment_id )} )
     return response
 
 
@@ -381,16 +375,16 @@ to better understand the task.
 """
 
 
-def get_user(email):
+def get_user( email ):
     """
     Given an email, returns a document from the `users` collection.
     """
     # TODO: User Management
     # Retrieve the user document corresponding with the user's email.
-    return db.users.find_one({ "some_field": "some_value" })
+    return db.users.find_one( {"email": email} )
 
 
-def add_user(name, email, hashedpw):
+def add_user( name, email, hashedpw ):
     """
     Given a name, email and password, inserts a document with those credentials
     to the `users` collection.
@@ -408,17 +402,17 @@ def add_user(name, email, hashedpw):
         # Insert a user with the "name", "email", and "password" fields.
         # TODO: Durable Writes
         # Use a more durable Write Concern for this operation.
-        db.users.insert_one({
-            "name": "mongo",
-            "email": "mongo@mongodb.com",
-            "password": "flibbertypazzle"
-        })
+        db.users.insert_one( {
+                "name": name,
+                "email": email,
+                "password": hashedpw
+        } )
         return {"success": True}
     except DuplicateKeyError:
         return {"error": "A user with the given email already exists."}
 
 
-def login_user(email, jwt):
+def login_user( email, jwt ):
     """
     Given an email and JWT, logs in a user by updating the JWT corresponding
     with that user's email in the `sessions` collection.
@@ -430,15 +424,16 @@ def login_user(email, jwt):
         # Use an UPSERT statement to update the "jwt" field in the document,
         # matching the "user_id" field with the email passed to this function.
         db.sessions.update_one(
-            { "some_field": "some_value" },
-            { "$set": { "some_other_field": "some_other_value" } }
+                {"user_id": email},
+                {"$set": {"jwt": jwt}},
+                upsert=True
         )
         return {"success": True}
     except Exception as e:
         return {"error": e}
 
 
-def logout_user(email):
+def logout_user( email ):
     """
     Given a user's email, logs out that user by deleting their corresponding
     entry in the `sessions` collection.
@@ -448,13 +443,13 @@ def logout_user(email):
     try:
         # TODO: User Management
         # Delete the document in the `sessions` collection matching the email.
-        db.sessions.delete_one({ "some_field": "some_value" })
+        db.sessions.delete_one( {"user_id": email} )
         return {"success": True}
     except Exception as e:
         return {"error": e}
 
 
-def get_user_session(email):
+def get_user_session( email ):
     """
     Given a user's email, finds that user's session in `sessions`.
 
@@ -463,12 +458,12 @@ def get_user_session(email):
     try:
         # TODO: User Management
         # Retrieve the session document corresponding with the user's email.
-        return db.sessions.find_one({ "some_field": "some_value" })
+        return db.sessions.find_one( {"user_id": email} )
     except Exception as e:
         return {"error": e}
 
 
-def delete_user(email):
+def delete_user( email ):
     """
     Given a user's email, deletes a user from the `users` collection and deletes
     that user's session from the `sessions` collection.
@@ -476,17 +471,17 @@ def delete_user(email):
     try:
         # TODO: User Management
         # Delete the corresponding documents from `users` and `sessions`.
-        db.sessions.delete_one({ "some_field": "some_value" })
-        db.users.delete_one({ "some_field": "some_value" })
-        if get_user(email) is None:
+        db.sessions.delete_one( {"user_id": email} )
+        db.users.delete_one( {"email": email} )
+        if get_user( email ) is None:
             return {"success": True}
         else:
-            raise ValueError("Deletion unsuccessful")
+            raise ValueError( "Deletion unsuccessful" )
     except Exception as e:
         return {"error": e}
 
 
-def update_prefs(email, prefs):
+def update_prefs( email, prefs ):
     """
     Given a user's email and a dictionary of preferences, update that user's
     preferences.
@@ -504,15 +499,15 @@ def update_prefs(email, prefs):
         # TODO: User preferences
         # Use the data in "prefs" to update the user's preferences.
         response = db.users.update_one(
-            { "some_field": "some_value" },
-            { "$set": { "some_other_field": "some_other_value" } }
+                {"some_field": "some_value"},
+                {"$set": {"some_other_field": "some_other_value"}}
         )
         if response.matched_count == 0:
             return {'error': 'no user found'}
         else:
             return response
     except Exception as e:
-        return {'error': str(e)}
+        return {'error': str( e )}
 
 
 def most_active_commenters():
@@ -533,18 +528,18 @@ def most_active_commenters():
     # Return the 20 users who have commented the most on MFlix.
     pipeline = []
 
-    rc = db.comments.read_concern # you may want to change this read concern!
-    comments = db.comments.with_options(read_concern=rc)
-    result = comments.aggregate(pipeline)
-    return list(result)
+    rc = db.comments.read_concern  # you may want to change this read concern!
+    comments = db.comments.with_options( read_concern=rc )
+    result = comments.aggregate( pipeline )
+    return list( result )
 
 
-def make_admin(email):
+def make_admin( email ):
     """
     Supplied method
     Flags the supplied user an an admin
     """
-    db.users.update_one({"email": email}, {"$set": {"isAdmin": True}})
+    db.users.update_one( {"email": email}, {"$set": {"isAdmin": True}} )
 
 
 def get_configuration():
@@ -557,8 +552,8 @@ def get_configuration():
     """
 
     try:
-        role_info = db.command({'connectionStatus': 1}).get('authInfo').get(
-            'authenticatedUserRoles')[0]
+        role_info = db.command( {'connectionStatus': 1} ).get( 'authInfo' ).get(
+                'authenticatedUserRoles' )[0]
         return (db.client.max_pool_size, db.client.write_concern, role_info)
     except IndexError:
         return (db.client.max_pool_size, db.client.write_concern, {})
