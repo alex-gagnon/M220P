@@ -10,7 +10,7 @@ Look out for TODO markers for additional help. Good luck!
 
 from bson.objectid import ObjectId
 from flask import current_app, g
-from pymongo import DESCENDING, MongoClient
+from pymongo import DESCENDING, MongoClient, WriteConcern
 from pymongo.errors import DuplicateKeyError, OperationFailure
 from werkzeug.local import LocalProxy
 
@@ -402,11 +402,12 @@ def add_user( name, email, hashedpw ):
         # Insert a user with the "name", "email", and "password" fields.
         # TODO: Durable Writes
         # Use a more durable Write Concern for this operation.
-        db.users.insert_one( {
+        coll2 = db.users.with_options(write_concern=WriteConcern(w='majority', wtimeout=5000))
+        coll2.insert_one( {
                 "name": name,
                 "email": email,
                 "password": hashedpw
-        }, w='majority' )
+        } )
         return {"success": True}
     except DuplicateKeyError:
         return {"error": "A user with the given email already exists."}
@@ -499,8 +500,9 @@ def update_prefs( email, prefs ):
         # TODO: User preferences
         # Use the data in "prefs" to update the user's preferences.
         response = db.users.update_one(
-                {"some_field": "some_value"},
-                {"$set": {"some_other_field": "some_other_value"}}
+                {"email": email},
+                {"$set": {"preferences": prefs}},
+                upsert=True
         )
         if response.matched_count == 0:
             return {'error': 'no user found'}
@@ -554,6 +556,6 @@ def get_configuration():
     try:
         role_info = db.command( {'connectionStatus': 1} ).get( 'authInfo' ).get(
                 'authenticatedUserRoles' )[0]
-        return (db.client.max_pool_size, db.client.write_concern, role_info)
+        return db.client.max_pool_size, db.client.write_concern, role_info
     except IndexError:
-        return (db.client.max_pool_size, db.client.write_concern, {})
+        return db.client.max_pool_size, db.client.write_concern, {}
