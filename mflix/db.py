@@ -406,7 +406,7 @@ def add_user( name, email, hashedpw ):
                 "name": name,
                 "email": email,
                 "password": hashedpw
-        } )
+        }, w='majority' )
         return {"success": True}
     except DuplicateKeyError:
         return {"error": "A user with the given email already exists."}
