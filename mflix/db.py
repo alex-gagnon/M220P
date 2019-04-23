@@ -245,7 +245,8 @@ def get_movie( id ):
 
         Please implement a $lookup stage in this pipeline to find all the
         comments for the given movie. The movie_id in the `comments` collection
-        can be used to refer to the _id from the `movies` collection.
+        can be used to refer to the _id from the `movies` collection. They should
+        be sorted by date.
 
         Embed the joined comments in a new field called "comments".
         """
@@ -256,6 +257,23 @@ def get_movie( id ):
                 {
                         "$match": {
                                 "_id": ObjectId( id )
+                        }
+                },
+                {
+                        "$lookup": {
+                                "from": "comments",
+                                "let": {"id": "$_id"},
+                                "pipeline": [
+                                        {
+                                                "$match": {
+                                                        "$expr": {"$eq": ['$movie_id', '$$id']}
+                                                }
+                                        },
+                                        {
+                                                "$sort": {"date": -1}
+                                        }
+                                ],
+                                "as": "comments"
                         }
                 }
         ]
@@ -402,7 +420,7 @@ def add_user( name, email, hashedpw ):
         # Insert a user with the "name", "email", and "password" fields.
         # TODO: Durable Writes
         # Use a more durable Write Concern for this operation.
-        coll2 = db.users.with_options(write_concern=WriteConcern(w='majority', wtimeout=5000))
+        coll2 = db.users.with_options( write_concern=WriteConcern( w='majority', wtimeout=5000 ) )
         coll2.insert_one( {
                 "name": name,
                 "email": email,
