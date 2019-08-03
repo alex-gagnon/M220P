@@ -10,7 +10,7 @@ Look out for TODO markers for additional help. Good luck!
 
 from bson.objectid import ObjectId
 from flask import current_app, g
-from pymongo import DESCENDING, MongoClient
+from pymongo import DESCENDING, MongoClient, WriteConcern
 from pymongo.errors import DuplicateKeyError, OperationFailure
 from werkzeug.local import LocalProxy
 
@@ -245,7 +245,8 @@ def get_movie( id ):
 
         Please implement a $lookup stage in this pipeline to find all the
         comments for the given movie. The movie_id in the `comments` collection
-        can be used to refer to the _id from the `movies` collection.
+        can be used to refer to the _id from the `movies` collection. They should
+        be sorted by date.
 
         Embed the joined comments in a new field called "comments".
         """
@@ -256,6 +257,23 @@ def get_movie( id ):
                 {
                         "$match": {
                                 "_id": ObjectId( id )
+                        }
+                },
+                {
+                        "$lookup": {
+                                "from": "comments",
+                                "let": {"id": "$_id"},
+                                "pipeline": [
+                                        {
+                                                "$match": {
+                                                        "$expr": {"$eq": ['$movie_id', '$$id']}
+                                                }
+                                        },
+                                        {
+                                                "$sort": {"date": -1}
+                                        }
+                                ],
+                                "as": "comments"
                         }
                 }
         ]
@@ -318,7 +336,14 @@ def add_comment( movie_id, user, comment, date ):
     """
     # TODO: Create/Update Comments
     # Construct the comment document to be inserted into MongoDB.
-    comment_doc = {"some_field": "some_value"}
+    comment_doc = {
+            "movie_id": ObjectId( movie_id ),
+            "name": user.name,
+            "email": user.email,
+            "text": comment,
+            "date": date
+    }
+
     return db.comments.insert_one( comment_doc )
 
 
@@ -332,8 +357,8 @@ def update_comment( comment_id, user_email, text, date ):
     # Use the user_email and comment_id to select the proper comment, then
     # update the "text" and "date" of the selected comment.
     response = db.comments.update_one(
-            {"some_field": "some_value"},
-            {"$set": {"some_other_field": "some_other_value"}}
+            {"_id": ObjectId( comment_id ), "email": user_email},
+            {"$set": {"text": text, "date": date}}
     )
 
     return response
@@ -354,7 +379,7 @@ def delete_comment( comment_id, user_email ):
 
     # TODO: Delete Comments
     # Use the user_email and comment_id to delete the proper comment.
-    response = db.comments.delete_one( {"_id": ObjectId( comment_id )} )
+    response = db.comments.delete_one( {"_id": ObjectId( comment_id ), "email": user_email} )
     return response
 
 
@@ -402,7 +427,8 @@ def add_user( name, email, hashedpw ):
         # Insert a user with the "name", "email", and "password" fields.
         # TODO: Durable Writes
         # Use a more durable Write Concern for this operation.
-        db.users.insert_one( {
+        coll2 = db.users.with_options( write_concern=WriteConcern( w='majority', wtimeout=5000 ) )
+        coll2.insert_one( {
                 "name": name,
                 "email": email,
                 "password": hashedpw
@@ -499,8 +525,9 @@ def update_prefs( email, prefs ):
         # TODO: User preferences
         # Use the data in "prefs" to update the user's preferences.
         response = db.users.update_one(
-                {"some_field": "some_value"},
-                {"$set": {"some_other_field": "some_other_value"}}
+                {"email": email},
+                {"$set": {"preferences": prefs}},
+                upsert=True
         )
         if response.matched_count == 0:
             return {'error': 'no user found'}
@@ -526,7 +553,21 @@ def most_active_commenters():
     """
     # TODO: User Report
     # Return the 20 users who have commented the most on MFlix.
-    pipeline = []
+    pipeline = [{
+            "$group": {
+                    "_id": "$email",
+                    "count": {
+                            "$sum": 1
+                    }
+            }
+    }, {
+            "$sort": {
+                    "count": -1
+            }
+    }, {
+            "$limit": 20
+    }
+    ]
 
     rc = db.comments.read_concern  # you may want to change this read concern!
     comments = db.comments.with_options( read_concern=rc )
@@ -554,6 +595,6 @@ def get_configuration():
     try:
         role_info = db.command( {'connectionStatus': 1} ).get( 'authInfo' ).get(
                 'authenticatedUserRoles' )[0]
-        return (db.client.max_pool_size, db.client.write_concern, role_info)
+        return db.client.max_pool_size, db.client.write_concern, role_info
     except IndexError:
-        return (db.client.max_pool_size, db.client.write_concern, {})
+        return db.client.max_pool_size, db.client.write_concern, {}
